@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.project.community.bbs.BbsDAO">
+
+	<resultMap type="com.project.community.file.FileVO" id="fileMap">
+		<result column="FILE_CODE" property="fileCode"/>
+		<result column="FILE_PATH" property="filePath"/>
+		<result column="STORED_NAME" property="storedName"/>
+		<result column="ORIGIN_NAME" property="originName"/>
+	</resultMap>
+
+	<resultMap type="com.project.community.bbs.BbsTblVO" id="bbsMap">
+        <result property="seq" 			column="SEQ" />
+		<result property="rowNum" 		column="RN" />
+		<result property="userId" 		column="USERID" />
+        <result property="name" 		column="NAME" />		
+		<result property="title" 		column="TITLE" />
+		<result property="content" 		column="CONTENT" />
+		<result property="regDate" 		column="REGDATE" />
+		<result property="sub" 			column="SUB" />
+		<result property="bbsNo" 			column="BBSNO" />
+		<result property="count" 			column="COUNT" />
+		<result property="likeCount" 			column="LIKECOUNT" />
+		<result property="exception_mode" 			column="EXCEPTION_MODE" />
+		<result property="fileCode" 			column="FILE_CODE" />
+		<result property="rplyRowCount" 			column="RPLYROWCOUNT" />
+		<collection property="fileVO" resultMap="fileMap"/>
+	</resultMap>
+    
+    <select id="selectBbsFashionRowCount" resultType="integer">		
+        SELECT COUNT(*) FROM EZBBS_TBL WHERE SUB=#{sub}
+		<if test = "exception_mode.equals('recommend')">
+		AND (exception_mode=#{exception_mode} or exception_mode = 'HotRecommend')
+		</if>
+	</select>
+
+	
+	<select id="selectBbsFashionList" resultMap="bbsMap">	
+		SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY SEQ DESC) AS RN, EZBBS_TBL.* FROM EZBBS_TBL WHERE SUB=#{sub}
+		<if test = "exception_mode.equals('recommend')">
+		AND (exception_mode=#{exception_mode} or exception_mode = 'HotRecommend')
+		</if>
+		)
+		where rn between (#{page} * #{rowsPerPage}) + 1 AND ((#{page} + 1) * #{rowsPerPage}) order by seq desc
+		
+        <!-- SELECT * FROM EZBBS_TBL
+		WHERE (SEQ <![CDATA[>=]]>  (( 26 - ((#{page} + 1) * #{rowsPerPage}))+ 1)) AND 
+		(SEQ <![CDATA[<=]]> 26 - (#{page} * #{rowsPerPage})) AND SUB=#{sub}
+		ORDER BY SEQ DESC -->
+	</select>
+	
+	
+	<select id="selectBbsFashionContent" resultMap="bbsMap">		
+        select d.*, f.stored_name, f.origin_name from ezbbs_tbl d left join file_tbl f on d.file_code = f.file_code WHERE d.NAME=#{name} AND d.SEQ=#{seq} AND d.SUB=#{sub}
+		<!-- SELECT * FROM EZBBS_TBL WHERE NAME=#{name} AND SEQ=#{seq} AND SUB=#{sub} -->
+	</select>
+
+	<update id="updateBbsContent">
+	UPDATE EZBBS_TBL SET
+	TITLE=#{title},
+	CONTENT=#{content}
+	WHERE NAME=#{name} AND seq = #{seq} AND SUB = #{sub}
+	</update>
+
+	<insert id="insertBbsContent"> 
+        INSERT INTO EZBBS_TBL (SEQ, USERID, NAME, TITLE, CONTENT, REGDATE, SUB, BBSNO
+		<if test = "fileCode!=null">
+		,FILE_CODE
+		</if>
+		) VALUES (
+		(select NVL(MAX(SEQ), 0) + 1 MAXSEQ from ezbbs_tbl where SUB=#{sub})
+		,#{userId}, #{name}, #{title}, #{content}, sysdate, #{sub},
+		(select NVL(MAX(BBSNO), 0) + 1 MAXNO from ezbbs_tbl)
+		<if test = "fileCode!=null">
+		,#{fileCode}
+		</if>
+		)
+		
+    </insert>
+ 
+	<delete id="deleteBbsContent">
+	DELETE FROM EZBBS_TBL 
+	WHERE USERID=#{userId} AND SEQ=#{seq} AND SUB=#{sub}
+	</delete>
+
+	<update id="updateViewCount">
+	UPDATE EZBBS_TBL SET
+	COUNT = COUNT + 1	
+	WHERE NAME=#{name} AND seq = #{seq} AND SUB = #{sub}
+	</update>
+
+	<update id="updateLikeCount">
+	UPDATE EZBBS_TBL SET
+	LIKECOUNT = LIKECOUNT + 1	
+	WHERE SEQ = #{seq} AND TITLE = #{title} AND SUB = #{sub}
+	</update>
+
+	<update id="updateDisLikeCount">
+	UPDATE EZBBS_TBL SET
+	LIKECOUNT = LIKECOUNT - 1	
+	WHERE SEQ = #{seq} AND TITLE = #{title} AND SUB = #{sub}
+	</update>
+
+	<select id="selectBbsSearchRowCount" resultType="integer">		
+        SELECT COUNT(*) FROM EZBBS_TBL
+		<choose>
+		<when test="searchType.equals('title')">
+		WHERE title LIKE '%' || #{keyWord} || '%'
+		</when>
+		
+		<when test="searchType.equals('content')">
+		WHERE content LIKE '%' || #{keyWord} || '%'
+		</when>
+		
+		<when test="searchType.equals('title_content')">
+		WHERE title LIKE '%' || #{keyWord} || '%'
+		or content LIKE '%' || #{keyWord} || '%'
+		</when>
+		
+		<when test="searchType.equals('name')">
+		WHERE name LIKE '%' || #{keyWord} || '%'
+		</when>
+        </choose>
+		
+		AND SUB=#{sub}
+		<if test="exception_mode != null and (exception_mode.equals('recommend'))">
+		AND (exception_mode=#{exception_mode} or exception_mode = 'HotRecommend')
+		</if>
+		
+		
+	</select>
+
+	<select id="selectBbsSearchList" resultMap="bbsMap">
+	SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY SEQ DESC) AS RN, EZBBS_TBL.* FROM EZBBS_TBL
+	<choose>
+		<when test="searchType.equals('title')">
+		WHERE title LIKE '%' || #{keyWord} || '%' 
+		</when>
+		
+		<when test="searchType.equals('content')">
+		WHERE content LIKE '%' || #{keyWord} || '%'
+		</when>
+		
+		<when test="searchType.equals('title_content')">
+		WHERE title LIKE '%' || #{keyWord} || '%'
+		or content LIKE '%' || #{keyWord} || '%'
+		</when>
+		
+		<when test="searchType.equals('name')">
+		WHERE name LIKE '%' || #{keyWord} || '%'
+		</when>		
+	</choose>	
+		AND SUB=#{sub}
+		<if test="exception_mode != null and (exception_mode.equals('recommend'))">
+		AND (exception_mode=#{exception_mode} or exception_mode = 'HotRecommend')
+		</if>
+	)
+	where rn between (#{page} * #{rowsPerPage}) + 1 AND ((#{page} + 1) * #{rowsPerPage}) order by seq desc		    	
+	</select>
+
+	<select id="selectBbsBestSearchRowCount" resultType="integer">		
+        SELECT COUNT(*) FROM EZBBS_TBL
+		<if test="searchType.equals('title')">
+		WHERE title LIKE '%' || #{keyWord} || '%'
+		</if>
+		
+		<if test="searchType.equals('content')">
+		WHERE content LIKE '%' || #{keyWord} || '%'
+		</if>
+		
+		<if test="searchType.equals('title_content')">
+		WHERE title LIKE '%' || #{keyWord} || '%'
+		or content LIKE '%' || #{keyWord} || '%'
+		</if>
+		
+		<if test="searchType.equals('name')">
+		WHERE name LIKE '%' || #{keyWord} || '%'
+		</if>
+		<if test="searchType.equals('name')">
+		WHERE name LIKE '%' || #{keyWord} || '%'
+		</if>
+		
+		AND exception_mode = 'HotRecommend'
+		
+		
+	</select>
+
+	<select id="selectBbsBestSearchList" resultMap="bbsMap">
+	SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY BBSNO DESC) AS RN, EZBBS_TBL.* FROM EZBBS_TBL
+	<if test="searchType.equals('title')">
+	WHERE title LIKE '%' || #{keyWord} || '%'
+	</if>
+	
+	<if test="searchType.equals('content')">
+	WHERE content LIKE '%' || #{keyWord} || '%'
+	</if>
+	
+	<if test="searchType.equals('title_content')">
+	WHERE title LIKE '%' || #{keyWord} || '%'
+	or content LIKE '%' || #{keyWord} || '%'
+	</if>
+	
+	<if test="searchType.equals('name')">
+	WHERE name LIKE '%' || #{keyWord} || '%'
+	</if>
+	<if test="searchType.equals('name')">
+	WHERE name LIKE '%' || #{keyWord} || '%'
+	</if>
+	AND exception_mode = 'HotRecommend'		
+	)
+	where rn between (#{page} * #{rowsPerPage}) + 1 AND ((#{page} + 1) * #{rowsPerPage}) order by BBSNO desc		    	
+	</select>
+
+	<update id="updateRecommend">
+	UPDATE EZBBS_TBL
+	SET exception_mode = 'recommend'
+	WHERE likecount <![CDATA[>=]]> 1
+	</update>
+
+	<select id="selectBbsFile" resultMap="bbsMap">		
+        SELECT * FROM EZBBS_TBL WHERE title=#{title} AND content=#{content} AND sub=#{sub}
+		AND file_code=#{fileCode}
+	</select>
+
+	<update id="updateRplyCount">
+	UPDATE EZBBS_TBL SET
+	rplyRowCount = (select count(*) from ezrply where bbsno=#{bbsNo})	
+	WHERE bbsno=#{bbsNo}
+	</update>
+
+	<update id="updateAllRplyCount">
+	update ezbbs_tbl
+	set rplyRowCount = (select count(*) from ezrply where ezbbs_tbl.bbsno = ezrply.bbsno)
+	</update>
+	
+	<select id="selectBbsBestList" resultMap="bbsMap">	
+		SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY BBSNO DESC) AS RN, EZBBS_TBL.* FROM EZBBS_TBL		
+		where exception_mode=#{exception_mode})
+		where rn between (#{page} * #{rowsPerPage}) + 1 AND ((#{page} + 1) * #{rowsPerPage}) order by BBSNO desc		       
+	</select>
+
+	<select id="selectBbsBestRowCount" resultType="integer">		
+        SELECT COUNT(*) FROM EZBBS_TBL where exception_mode = 'HotRecommend'
+	</select>
+
+	<update id="updateHotRecommend">
+	UPDATE EZBBS_TBL
+	SET exception_mode = 'HotRecommend'
+	WHERE likecount <![CDATA[>=]]> 2
+	</update>
+
+	<select id="selectBbsCombineSearchList" resultMap="bbsMap">
+	SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY BBSNO DESC) AS RN, EZBBS_TBL.* FROM EZBBS_TBL
+	WHERE 
+	<choose>
+		<when test="keyWord != null and keyWord != ''">
+			title LIKE '%' || #{keyWord} || '%' OR CONTENT LIKE '%' || #{keyWord} || '%'
+		</when>
+		<otherwise>
+			1=0 
+		</otherwise>
+	</choose>
+    )
+	where rn between (#{page} * #{rowsPerPage}) + 1 AND ((#{page} + 1) * #{rowsPerPage}) order by BBSNO desc		    	
+	</select>
+
+	<select id="selectBbsCombineSearchRowCount" resultType="integer">		
+        SELECT COUNT(*) FROM EZBBS_TBL
+		where
+		<choose>
+		<when test="keyWord != null and keyWord != ''">
+			title LIKE '%' || #{keyWord} || '%' OR CONTENT LIKE '%' || #{keyWord} || '%'
+		</when>
+		<otherwise>
+			1=0 
+		</otherwise>
+		</choose>		
+	</select>
+</mapper>

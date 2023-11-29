@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.project.community.rply.RplyDAO">
+<resultMap type="com.project.community.rply.RplyTblVO" id="rplyMap">
+        <result property="seq" 			column="SEQ" />
+		<result property="rowNum" 		column="RN" />
+		<result property="userId" 		column="USERID" />
+        <result property="name" 		column="NAME" />		
+		<result property="content" 		column="CONTENT" />
+		<result property="regDate" 		column="REGDATE" />
+		
+        <result property="bbsNo" 		column="BBSNO" />
+		<result property="rno" 		column="RNO" />
+		<result property="parentRno" 		column="PARENTRNO" />
+		<result property="originName" 		column="ORIGINNAME" />
+	</resultMap>
+
+	<select id="selectRplyFashionRowCount" resultType="integer">		
+        SELECT COUNT(*) FROM EZRPLY WHERE BBSNO=#{bbsNo}
+	</select>
+
+	<select id="selectRplyFashionList" resultMap="rplyMap">	
+	SELECT *FROM (SELECT ROWNUM AS RN, t.* FROM 
+	(SELECT * FROM ezrply WHERE BBSNO = #{bbsNo}
+	START WITH parentRno = 0
+	CONNECT BY NOCYCLE PRIOR rno = parentRno
+	ORDER SIBLINGS BY rno asc) t)
+	where rn between (#{page} * #{rowsPerPage}) + 1 AND ((#{page} + 1) * #{rowsPerPage})	
+		
+        <!-- SELECT * FROM EZBBS_TBL
+		WHERE (SEQ <![CDATA[>=]]>  (( 26 - ((#{page} + 1) * #{rowsPerPage}))+ 1)) AND 
+		(SEQ <![CDATA[<=]]> 26 - (#{page} * #{rowsPerPage})) AND SUB=#{sub}
+		ORDER BY SEQ DESC -->
+	</select>
+
+	<insert id="insertRplyContent"> 
+        INSERT INTO EZRPLY (RNO, PARENTRNO, SEQ, USERID, NAME, CONTENT, REGDATE, BBSNO, ORIGINNAME) VALUES (
+		
+        (SELECT NVL(MAX(RNO), 0) FROM ezrply) + 1 
+        ,
+		#{parentRno}
+		,(select NVL(MAX(SEQ), 0) + 1 MAXSEQ from EZRPLY where BBSNO=#{bbsNo})
+		,#{userId}, #{name}, #{content}, sysdate, #{bbsNo}, #{originName})
+    </insert>
+
+	<delete id="deleteRplyContent">
+	DELETE FROM EZRPLY
+        WHERE rno IN (
+            SELECT rno FROM (
+                SELECT rno FROM EZRPLY
+                START WITH rno = #{rno}
+                CONNECT BY NOCYCLE PRIOR rno = parentrno
+            )
+        )
+	</delete>
+
+	<delete id="deleteRplyAllContent">
+	DELETE FROM EZRPLY 
+	WHERE BBSNO=#{bbsNo}
+	</delete>
+
+	
+</mapper>
